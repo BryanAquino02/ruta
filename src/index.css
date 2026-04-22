@@ -44,12 +44,7 @@ button { font-family: var(--font); cursor: pointer; }
 
 /* ── APP SHELL ── */
 .app-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  max-width: 430px;
-  margin: 0 auto;
-  overflow: hidden;
+  height: 100dvh;  /* dvh en vez de vh — funciona mejor en móvil */
 }
 
 /* ── HEADER ── */
@@ -92,12 +87,8 @@ button { font-family: var(--font); cursor: pointer; }
 
 /* ── TABBAR ── */
 .tabbar {
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-shrink: 0;
   padding: 6px 8px max(6px, env(safe-area-inset-bottom));
-  gap: 4px;
+  flex-shrink: 0;  /* ← esta línea es crítica */
 }
 .tabbar__btn {
   flex: 1;
