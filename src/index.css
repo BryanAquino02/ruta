@@ -529,15 +529,19 @@ button { font-family: var(--font); cursor: pointer; }
   box-shadow: 0 0 0 2px #BFDBFE;
 }
 
-/* Fix: asegurar que el mapa de Mapbox no desborde */
-.mapboxgl-map { border-radius: 0; }
-.mapboxgl-ctrl-bottom-right { bottom: 8px !important; right: 8px !important; }
+/* Fix touch en móvil */
+.mapboxgl-map {
+  touch-action: auto !important;
+}
+.mapboxgl-canvas {
+  touch-action: auto !important;
+}
+.mapboxgl-ctrl-bottom-right {
+  bottom: 8px !important;
+  right: 8px !important;
+}
 .mapboxgl-popup-content {
   border-radius: 8px !important;
   box-shadow: var(--shadow-md) !important;
   padding: 10px 12px !important;
-}
-
-.mapboxgl-map {
-  touch-action: auto !important;
 }
