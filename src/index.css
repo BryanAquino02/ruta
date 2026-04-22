@@ -44,7 +44,10 @@ button { font-family: var(--font); cursor: pointer; }
 
 /* ── APP SHELL ── */
 .app-shell {
-  height: 100dvh;  /* dvh en vez de vh — funciona mejor en móvil */
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ── HEADER ── */
