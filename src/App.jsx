@@ -1,0 +1,39 @@
+import { useState } from 'react'
+import { usePedidos } from './hooks/usePedidos'
+import Header from './components/Header'
+import BottomNav from './components/BottomNav'
+import TasksPage from './pages/TasksPage'
+import NewPedidoPage from './pages/NewPedidoPage'
+import ChatPage from './pages/ChatPage'
+
+export default function App() {
+  const [activePage, setActivePage] = useState('tasks')
+  const { pedidos, addPedido, completePedido, deletePedido } = usePedidos()
+
+  return (
+    <div className="app-shell">
+      <Header />
+
+      {activePage === 'tasks' && (
+        <TasksPage
+          pedidos={pedidos}
+          onComplete={completePedido}
+          onDelete={deletePedido}
+        />
+      )}
+
+      {activePage === 'nuevo' && (
+        <NewPedidoPage
+          onAdd={addPedido}
+          onNavigate={setActivePage}
+        />
+      )}
+
+      {activePage === 'chat' && (
+        <ChatPage pedidos={pedidos} />
+      )}
+
+      <BottomNav activePage={activePage} onNavigate={setActivePage} />
+    </div>
+  )
+}
