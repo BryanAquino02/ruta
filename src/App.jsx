@@ -10,7 +10,7 @@ import MapPage from './pages/MapPage'
 // ─────────────────────────────────────────
 //  🗺️  Pega aquí tu token de Mapbox
 // ─────────────────────────────────────────
-const MAPBOX_TOKEN = 'TU_TOKEN_AQUI'
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
 export default function App() {
   const [activePage, setActivePage] = useState('tasks')
