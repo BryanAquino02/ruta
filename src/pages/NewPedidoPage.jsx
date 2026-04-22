@@ -1,27 +1,35 @@
 import { useState } from 'react'
 import { getTodayStr } from '../utils/dateUtils'
+import AddressInput from '../components/AddressInput'
 
 const INITIAL_FORM = {
-  cliente:   '',
-  producto:  '',
-  origen:    '',
-  destino:   '',
-  fecha:     getTodayStr(),
-  prioridad: 'normal',
+  cliente:    '',
+  producto:   '',
+  origen:     '',
+  origenCoords:  null, // { lat, lng }
+  destino:    '',
+  destinoCoords: null, // { lat, lng }
+  fecha:      getTodayStr(),
+  prioridad:  'normal',
 }
 
 /**
  * @param {{
  *   onAdd: (fields: object) => void,
  *   onNavigate: (page: string) => void,
+ *   MAPBOX_TOKEN: string,
  * }} props
  */
-export default function NewPedidoPage({ onAdd, onNavigate }) {
-  const [form, setForm] = useState(INITIAL_FORM)
+export default function NewPedidoPage({ onAdd, onNavigate, MAPBOX_TOKEN }) {
+  const [form, setForm]     = useState(INITIAL_FORM)
   const [errors, setErrors] = useState({})
 
   const set = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
+
+  // Para campos de dirección con autocomplete
+  const setAddress = (field, coordsField) => (text, coords) =>
+    setForm((prev) => ({ ...prev, [field]: text, [coordsField]: coords || null }))
 
   const validate = () => {
     const required = ['cliente', 'producto', 'origen', 'destino']
@@ -47,7 +55,7 @@ export default function NewPedidoPage({ onAdd, onNavigate }) {
       <div className="form-scroll">
         <div className="form-inner">
 
-          {/* Pedido info */}
+          {/* Info del pedido */}
           <div className="form-section">Información del pedido</div>
           <div className="fcard">
             <div className={fieldClass('cliente')}>
@@ -85,47 +93,59 @@ export default function NewPedidoPage({ onAdd, onNavigate }) {
             </div>
           </div>
 
-          {/* Route */}
+          {/* Ruta con autocomplete */}
           <div className="form-section">Ruta</div>
           <div className="fcard">
-            <div className={fieldClass('origen')}>
+            <div className={fieldClass('origen')} style={{ overflow: 'visible' }}>
               <div className="fi" style={{ color: 'var(--blue)' }}>
                 <svg width="10" height="10" viewBox="0 0 10 10">
                   <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" />
                   <circle cx="5" cy="5" r="2" fill="currentColor" />
                 </svg>
               </div>
-              <div className="fcol">
-                <div className="flabel">Recoger en *</div>
-                <input
-                  type="text"
+              <div className="fcol" style={{ overflow: 'visible' }}>
+                <div className="flabel">
+                  Recoger en *
+                  {form.origenCoords && (
+                    <span style={{ color: 'var(--green)', marginLeft: 6, fontWeight: 600 }}>✓</span>
+                  )}
+                </div>
+                <AddressInput
                   value={form.origen}
-                  onChange={set('origen')}
-                  placeholder="Dirección de recojo"
+                  onChange={setAddress('origen', 'origenCoords')}
+                  placeholder="Busca la dirección de recojo"
+                  token={MAPBOX_TOKEN}
+                  hasError={!!errors.origen}
                 />
               </div>
             </div>
 
-            <div className={fieldClass('destino')}>
+            <div className={fieldClass('destino')} style={{ overflow: 'visible' }}>
               <div className="fi" style={{ color: 'var(--green)' }}>
                 <svg width="10" height="10" viewBox="0 0 10 10">
                   <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" />
                   <circle cx="5" cy="5" r="2" fill="currentColor" />
                 </svg>
               </div>
-              <div className="fcol">
-                <div className="flabel">Entregar en *</div>
-                <input
-                  type="text"
+              <div className="fcol" style={{ overflow: 'visible' }}>
+                <div className="flabel">
+                  Entregar en *
+                  {form.destinoCoords && (
+                    <span style={{ color: 'var(--green)', marginLeft: 6, fontWeight: 600 }}>✓</span>
+                  )}
+                </div>
+                <AddressInput
                   value={form.destino}
-                  onChange={set('destino')}
-                  placeholder="Dirección de entrega"
+                  onChange={setAddress('destino', 'destinoCoords')}
+                  placeholder="Busca la dirección de entrega"
+                  token={MAPBOX_TOKEN}
+                  hasError={!!errors.destino}
                 />
               </div>
             </div>
           </div>
 
-          {/* Details */}
+          {/* Detalles */}
           <div className="form-section">Detalles</div>
           <div className="grid2">
             <div className="fcard">
