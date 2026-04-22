@@ -8,7 +8,7 @@ import ChatPage from './pages/ChatPage'
 import MapPage from './pages/MapPage'
 
 // ─────────────────────────────────────────
-//  🗺️  Pega aquí tu token de Mapbox
+//  🗺️  Token de Mapbox (variable de entorno)
 // ─────────────────────────────────────────
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -32,6 +32,7 @@ export default function App() {
         <NewPedidoPage
           onAdd={addPedido}
           onNavigate={setActivePage}
+          MAPBOX_TOKEN={MAPBOX_TOKEN}
         />
       )}
 
