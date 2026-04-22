@@ -1,42 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
-// Cache en memoria para no re-geocodificar la misma dirección
 const geoCache = {}
 
-/**
- * Extrae la dirección "limpia" de un campo origen/destino.
- * Ej: "Imprenta El Centro — Jr. Ica 346" → "Jr. Ica 346, Lima, Perú"
- * Ej: "Oficina Mitsui — San Isidro"       → "San Isidro, Lima, Perú"
- */
 function cleanAddress(raw) {
-  // Toma la parte después del "—" si existe, si no usa todo
   const parts = raw.split('—')
   const addr  = (parts[1] || parts[0]).trim()
   return `${addr}, Lima, Perú`
 }
 
-/**
- * Geocodifica una dirección usando Mapbox Geocoding API.
- * Retorna { lat, lng } o null si falla.
- *
- * @param {string} address
- * @param {string} token - Mapbox access token
- * @returns {Promise<{lat: number, lng: number} | null>}
- */
 async function geocode(address, token) {
   if (geoCache[address]) return geoCache[address]
-
   try {
-    const query    = encodeURIComponent(address)
-    const url      = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json`
-                   + `?access_token=${token}&country=pe&limit=1&language=es`
-    const res      = await fetch(url)
-    const data     = await res.json()
-    const feature  = data.features?.[0]
-
-    if (!feature) return null
-
-    const [lng, lat] = feature.center
+    const query = encodeURIComponent(address)
+    const url   = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json`
+                + `?access_token=${token}&country=pe&limit=1&language=es`
+    const res   = await fetch(url)
+    const data  = await res.json()
+    const feat  = data.features?.[0]
+    if (!feat) return null
+    const [lng, lat] = feat.center
     const result = { lat, lng }
     geoCache[address] = result
     return result
@@ -45,19 +27,19 @@ async function geocode(address, token) {
   }
 }
 
-/**
- * Hook que geocodifica los orígenes y destinos de todos los pedidos.
- * Retorna una lista de puntos con coordenadas, listos para pintar en el mapa.
- *
- * @param {Array}  pedidos
- * @param {string} token - Mapbox access token
- * @returns {{ points: Array, loading: boolean }}
- */
 export function useGeocoding(pedidos, token) {
   const [points,  setPoints]  = useState([])
   const [loading, setLoading] = useState(false)
 
+  // Usar una key estable basada en los IDs para evitar re-renders infinitos
+  const pedidosKey = pedidos.map(p => p.id).join(',')
+  const prevKey    = useRef(null)
+
   useEffect(() => {
+    // Solo re-geocodificar si los pedidos cambiaron realmente
+    if (pedidosKey === prevKey.current) return
+    prevKey.current = pedidosKey
+
     if (!token || token === 'TU_TOKEN_AQUI' || pedidos.length === 0) {
       setPoints([])
       return
@@ -73,15 +55,12 @@ export function useGeocoding(pedidos, token) {
         { pedido, type: 'destino', address: cleanAddress(pedido.destino) },
       ])
 
-      // Geocodificar en paralelo (máx 10 a la vez para no sobrecargar)
       const results = []
       for (let i = 0; i < tasks.length; i += 10) {
-        const batch = tasks.slice(i, i + 10)
+        const batch  = tasks.slice(i, i + 10)
         const coords = await Promise.all(batch.map(t => geocode(t.address, token)))
         coords.forEach((coord, j) => {
-          if (coord) {
-            results.push({ ...batch[j], ...coord })
-          }
+          if (coord) results.push({ ...batch[j], ...coord })
         })
       }
 
@@ -93,7 +72,8 @@ export function useGeocoding(pedidos, token) {
 
     run()
     return () => { cancelled = true }
-  }, [pedidos, token])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidosKey, token])
 
   return { points, loading }
 }
