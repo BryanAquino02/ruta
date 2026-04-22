@@ -480,3 +480,57 @@ button { font-family: var(--font); cursor: pointer; }
 }
 .send-btn:active  { background: #1e293b; transform: scale(0.93); }
 .send-btn:disabled { background: var(--border); cursor: default; transform: none; }
+
+
+/* ── MAP PAGE ── (agregar al final de index.css) */
+
+.map-filterbar {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.map-filter-btn {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.12s;
+}
+.map-filter-btn--active {
+  background: var(--blue-bg);
+  border-color: #93C5FD;
+  color: var(--blue);
+}
+
+.map-pedido-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 11px 13px;
+  cursor: pointer;
+  transition: all 0.12s;
+  box-shadow: var(--shadow-sm);
+}
+.map-pedido-row:active,
+.map-pedido-row--active {
+  border-color: #93C5FD;
+  background: var(--blue-bg);
+  box-shadow: 0 0 0 2px #BFDBFE;
+}
+
+/* Fix: asegurar que el mapa de Mapbox no desborde */
+.mapboxgl-map { border-radius: 0; }
+.mapboxgl-ctrl-bottom-right { bottom: 8px !important; right: 8px !important; }
+.mapboxgl-popup-content {
+  border-radius: 8px !important;
+  box-shadow: var(--shadow-md) !important;
+  padding: 10px 12px !important;
+}
