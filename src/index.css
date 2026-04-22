@@ -537,3 +537,7 @@ button { font-family: var(--font); cursor: pointer; }
   box-shadow: var(--shadow-md) !important;
   padding: 10px 12px !important;
 }
+
+.mapboxgl-map {
+  touch-action: auto !important;
+}
