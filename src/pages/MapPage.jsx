@@ -25,47 +25,71 @@ const ZONA_COLORS = {
 // ── OPTIMIZACIÓN DE RUTA ──
 // Calcula distancia en km entre dos coordenadas (Haversine)
 function distKm(a, b) {
-  const R  = 6371
+  const R    = 6371
   const dLat = (b.lat - a.lat) * Math.PI / 180
   const dLng = (b.lng - a.lng) * Math.PI / 180
-  const x = Math.sin(dLat/2) ** 2 +
+  const x    = Math.sin(dLat/2) ** 2 +
     Math.cos(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180) * Math.sin(dLng/2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x))
 }
 
-// Algoritmo nearest-neighbor para orden óptimo de recogidas
-function optimizarRuta(points) {
-  const origenes = points.filter(p => p.type === 'origen')
-  if (origenes.length <= 1) return points
+// Nearest-neighbor sobre un conjunto de puntos
+function nearestNeighbor(pts) {
+  if (pts.length <= 1) return pts
+  const visited = new Set()
+  const result  = []
+  let actual    = pts[0]
+  visited.add(actual.pedido.id)
+  result.push(actual)
 
-  const visitados = new Set()
-  const orden     = []
-  let actual      = origenes[0]
-  visitados.add(actual.pedido.id)
-  orden.push(actual)
-
-  while (orden.length < origenes.length) {
-    let nearest = null
-    let minDist = Infinity
-    for (const p of origenes) {
-      if (visitados.has(p.pedido.id)) continue
-      const d = distKm({ lat: actual.lat, lng: actual.lng }, { lat: p.lat, lng: p.lng })
+  while (result.length < pts.length) {
+    let nearest = null, minDist = Infinity
+    for (const p of pts) {
+      if (visited.has(p.pedido.id)) continue
+      const d = distKm(actual, p)
       if (d < minDist) { minDist = d; nearest = p }
     }
     if (!nearest) break
-    visitados.add(nearest.pedido.id)
-    orden.push(nearest)
+    visited.add(nearest.pedido.id)
+    result.push(nearest)
     actual = nearest
   }
-
-  // Añadir destinos después de cada recogida en el orden optimizado
-  const result = []
-  orden.forEach(o => {
-    result.push(o)
-    const dest = points.find(p => p.pedido.id === o.pedido.id && p.type === 'destino')
-    if (dest) result.push(dest)
-  })
   return result
+}
+
+/**
+ * Estrategia real del broker:
+ * 1. Primero TODAS las recogidas, ordenadas por cercanía entre sí
+ *    (Centro de Lima primero — donde están la mayoría de proveedores)
+ * 2. Luego TODAS las entregas, ordenadas por cercanía entre sí
+ *    (minimiza el recorrido de salida hacia los clientes)
+ */
+function optimizarRuta(points) {
+  const origenes  = points.filter(p => p.type === 'origen')
+  const destinos  = points.filter(p => p.type === 'destino')
+
+  if (origenes.length <= 1 && destinos.length <= 1) return points
+
+  // Ordenar recogidas: las del Centro primero, luego nearest-neighbor
+  const centroOrig  = origenes.filter(p => detectZona(p.address || '') === 'Centro')
+  const otrosOrig   = origenes.filter(p => detectZona(p.address || '') !== 'Centro')
+  const origenOrden = [
+    ...nearestNeighbor(centroOrig),
+    ...nearestNeighbor(otrosOrig),
+  ]
+
+  // Ordenar entregas por nearest-neighbor desde la última recogida
+  const ultimaRecogida = origenOrden[origenOrden.length - 1]
+  let destinoOrden = destinos
+  if (ultimaRecogida && destinos.length > 1) {
+    // Empezar desde el destino más cercano a la última recogida
+    const sorted = [...destinos].sort((a, b) =>
+      distKm(ultimaRecogida, a) - distKm(ultimaRecogida, b)
+    )
+    destinoOrden = nearestNeighbor(sorted)
+  }
+
+  return [...origenOrden, ...destinoOrden]
 }
 
 // Detectar puntos muy cercanos (< 400m) para sugerir agrupación
@@ -420,9 +444,22 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
           {filtered.length === 0
             ? <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--ink3)', fontSize: 13 }}>No hay pedidos</div>
             : (showOptima
-                ? optimizedPoints.filter(p => p.type === 'origen').map(p => (
-                    <PedidoRow key={p.pedido.id} pedido={p.pedido} selected={selected?.id === p.pedido.id} onSelect={setSelected} orden={ordenOptimo[p.pedido.id]} />
-                  ))
+                ? <>
+                    {/* Recogidas */}
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '4px 2px' }}>
+                      📦 Recogidas — Centro primero
+                    </div>
+                    {optimizedPoints.filter(p => p.type === 'origen').map(p => (
+                      <PedidoRow key={p.pedido.id} pedido={p.pedido} selected={selected?.id === p.pedido.id} onSelect={setSelected} orden={ordenOptimo[p.pedido.id]} />
+                    ))}
+                    {/* Entregas */}
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '8px 2px 4px' }}>
+                      🏢 Entregas a clientes
+                    </div>
+                    {optimizedPoints.filter(p => p.type === 'destino').map((p, i) => (
+                      <PedidoRow key={`d-${p.pedido.id}`} pedido={p.pedido} selected={selected?.id === p.pedido.id} onSelect={setSelected} orden={null} />
+                    ))}
+                  </>
                 : filtered.map(p => (
                     <PedidoRow key={p.id} pedido={p} selected={selected?.id === p.id} onSelect={setSelected} />
                   ))
