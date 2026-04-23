@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
-import { useGeocoding } from '../hooks/useGeocoding'
 
 function detectZona(address) {
   const a = (address || '').toLowerCase()
@@ -22,119 +21,38 @@ const ZONA_COLORS = {
   'Otros': '#6B7280',
 }
 
-// ── OPTIMIZACIÓN DE RUTA ──
-// Calcula distancia en km entre dos coordenadas (Haversine)
+const PASO_ICONS = ['①','②','③','④','⑤','⑥','⑦','⑧']
+
 function distKm(a, b) {
-  const R    = 6371
-  const dLat = (b.lat - a.lat) * Math.PI / 180
-  const dLng = (b.lng - a.lng) * Math.PI / 180
-  const x    = Math.sin(dLat/2) ** 2 +
-    Math.cos(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180) * Math.sin(dLng/2) ** 2
+  const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180
+  const x = Math.sin(dLat/2) ** 2 + Math.cos(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180) * Math.sin(dLng/2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x))
 }
 
-// Nearest-neighbor sobre un conjunto de puntos
-function nearestNeighbor(pts) {
-  if (pts.length <= 1) return pts
-  const visited = new Set()
-  const result  = []
-  let actual    = pts[0]
-  visited.add(actual.pedido.id)
-  result.push(actual)
-
-  while (result.length < pts.length) {
-    let nearest = null, minDist = Infinity
-    for (const p of pts) {
-      if (visited.has(p.pedido.id)) continue
-      const d = distKm(actual, p)
-      if (d < minDist) { minDist = d; nearest = p }
-    }
-    if (!nearest) break
-    visited.add(nearest.pedido.id)
-    result.push(nearest)
-    actual = nearest
-  }
-  return result
+// Extrae todos los puntos mapeables de un pedido (pasos con coords)
+function getPuntosFromPedido(pedido) {
+  if (!pedido.pasos) return []
+  return pedido.pasos
+    .map((paso, i) => paso.coords ? {
+      lat: paso.coords.lat, lng: paso.coords.lng,
+      address: paso.direccion,
+      pedido, paso, pasoIndex: i,
+      type: i === pedido.pasos.length - 1 ? 'destino' : 'paso',
+    } : null)
+    .filter(Boolean)
 }
 
-/**
- * Estrategia real del broker:
- * 1. Primero TODAS las recogidas, ordenadas por cercanía entre sí
- *    (Centro de Lima primero — donde están la mayoría de proveedores)
- * 2. Luego TODAS las entregas, ordenadas por cercanía entre sí
- *    (minimiza el recorrido de salida hacia los clientes)
- */
-function optimizarRuta(points) {
-  const origenes  = points.filter(p => p.type === 'origen')
-  const destinos  = points.filter(p => p.type === 'destino')
+function PedidoRow({ pedido, onSelect, selected }) {
+  const pasosPendientes = (pedido.pasos || []).filter(s => !s.done)
+  const pasosTotal = (pedido.pasos || []).length
+  const completedCount = pasosTotal - pasosPendientes.length
 
-  if (origenes.length <= 1 && destinos.length <= 1) return points
-
-  // Ordenar recogidas: las del Centro primero, luego nearest-neighbor
-  const centroOrig  = origenes.filter(p => detectZona(p.address || '') === 'Centro')
-  const otrosOrig   = origenes.filter(p => detectZona(p.address || '') !== 'Centro')
-  const origenOrden = [
-    ...nearestNeighbor(centroOrig),
-    ...nearestNeighbor(otrosOrig),
-  ]
-
-  // Ordenar entregas por nearest-neighbor desde la última recogida
-  const ultimaRecogida = origenOrden[origenOrden.length - 1]
-  let destinoOrden = destinos
-  if (ultimaRecogida && destinos.length > 1) {
-    // Empezar desde el destino más cercano a la última recogida
-    const sorted = [...destinos].sort((a, b) =>
-      distKm(ultimaRecogida, a) - distKm(ultimaRecogida, b)
-    )
-    destinoOrden = nearestNeighbor(sorted)
-  }
-
-  return [...origenOrden, ...destinoOrden]
-}
-
-// Detectar puntos muy cercanos (< 400m) para sugerir agrupación
-function detectarCercanos(points) {
-  const origenes = points.filter(p => p.type === 'origen')
-  const grupos   = []
-
-  for (let i = 0; i < origenes.length; i++) {
-    for (let j = i + 1; j < origenes.length; j++) {
-      const d = distKm(origenes[i], origenes[j])
-      if (d < 0.4) { // 400 metros
-        grupos.push({
-          a:    origenes[i].pedido,
-          b:    origenes[j].pedido,
-          dist: Math.round(d * 1000),
-        })
-      }
-    }
-  }
-  return grupos
-}
-
-function ZonaBadge({ zona }) {
-  const color = ZONA_COLORS[zona] || ZONA_COLORS['Otros']
-  return (
-    <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: color + '18', color, border: `1px solid ${color}30`, flexShrink: 0 }}>
-      {zona}
-    </span>
-  )
-}
-
-function PedidoRow({ pedido, onSelect, selected, orden }) {
-  const zonaO = detectZona(pedido.origen)
-  const zonaD = detectZona(pedido.destino)
   return (
     <div
       className={`map-pedido-row${selected ? ' map-pedido-row--active' : ''}`}
       onClick={() => onSelect(pedido)}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        {orden && (
-          <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--ink)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            {orden}
-          </div>
-        )}
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', flex: 1 }}>{pedido.cliente}</span>
         <span style={{
           fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
@@ -144,13 +62,23 @@ function PedidoRow({ pedido, onSelect, selected, orden }) {
           {pedido.done ? 'Entregado' : pedido.prioridad}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <ZonaBadge zona={zonaO} />
-        <span style={{ fontSize: 11, color: 'var(--ink3)', alignSelf: 'center' }}>→</span>
-        <ZonaBadge zona={zonaD} />
+      {/* Progreso de pasos */}
+      <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 4 }}>
+        {completedCount}/{pasosTotal} pasos · {pedido.producto}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--ink3)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {pedido.origen.split(',')[0]}
+      {/* Pasos resumidos */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {(pedido.pasos || []).map((paso, i) => (
+          <span key={paso.id || i} style={{
+            fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 500,
+            background: paso.done ? 'var(--green-bg)' : 'var(--bg)',
+            color: paso.done ? 'var(--green)' : 'var(--ink3)',
+            border: `1px solid ${paso.done ? 'var(--green)' : 'var(--border)'}`,
+            textDecoration: paso.done ? 'line-through' : 'none',
+          }}>
+            {paso.nombre}
+          </span>
+        ))}
       </div>
     </div>
   )
@@ -160,12 +88,10 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
   const mapContainer = useRef(null)
   const mapRef       = useRef(null)
   const markersRef   = useRef([])
-  const contactMarkersRef = useRef([])
   const [selected, setSelected]   = useState(null)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [mapError, setMapError]   = useState(false)
   const [activeFilter, setFilter] = useState('all')
-  const [showOptima, setShowOptima] = useState(false)
 
   const filtered = pedidos.filter(p => {
     if (activeFilter === 'pending') return !p.done
@@ -173,33 +99,8 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
     return true
   })
 
-  const { points, loading: geocoding } = useGeocoding(filtered, MAPBOX_TOKEN)
-
-  // Ruta optimizada
-  const optimizedPoints = useMemo(() => optimizarRuta(points), [points])
-  const rutaPoints      = showOptima ? optimizedPoints : points
-
-  // Orden de pedidos optimizado
-  const ordenOptimo = useMemo(() => {
-    const origen = optimizedPoints.filter(p => p.type === 'origen')
-    const map    = {}
-    origen.forEach((p, i) => { map[p.pedido.id] = i + 1 })
-    return map
-  }, [optimizedPoints])
-
-  // Sugerencias de agrupación
-  const cercanos = useMemo(() => detectarCercanos(points), [points])
-
-  // Contactos relevantes (los que tienen pedido activo)
-  const contactosActivos = useMemo(() => {
-    const pedidosActivos = pedidos.filter(p => !p.done)
-    return contactos.filter(c =>
-      c.coords && pedidosActivos.some(p =>
-        p.origen.toLowerCase().includes(c.nombre.toLowerCase()) ||
-        p.destino.toLowerCase().includes(c.nombre.toLowerCase())
-      )
-    )
-  }, [pedidos, contactos])
+  // Todos los puntos mapeables (pasos con coords)
+  const allPoints = useMemo(() => filtered.flatMap(getPuntosFromPedido), [filtered])
 
   // ── INIT MAP ──
   useEffect(() => {
@@ -227,7 +128,7 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── RENDER MARKERS DE PEDIDOS ──
+  // ── RENDER MARKERS ──
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || !window.mapboxgl) return
     const map = mapRef.current
@@ -237,32 +138,29 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
     if (map.getLayer('route'))  map.removeLayer('route')
     if (map.getSource('route')) map.removeSource('route')
 
-    if (rutaPoints.length === 0) return
+    if (allPoints.length === 0) return
 
     const bounds = new window.mapboxgl.LngLatBounds()
 
-    rutaPoints.forEach((pt, idx) => {
-      const zona  = detectZona(pt.address || pt.pedido.origen)
-      const color = pt.type === 'origen' ? (ZONA_COLORS[zona] || '#2563EB') : '#16A34A'
+    allPoints.forEach((pt) => {
+      const { pedido, paso, pasoIndex } = pt
+      const isLast = pasoIndex === (pedido.pasos.length - 1)
+      const zona   = detectZona(pt.address || '')
+      const color  = paso.done ? '#9CA3AF' : (isLast ? '#16A34A' : (ZONA_COLORS[zona] || '#2563EB'))
 
       const el = document.createElement('div')
       el.style.cssText = `
-        width: 28px; height: 28px; border-radius: 50%;
+        width: 30px; height: 30px; border-radius: 50%;
         background: ${color}; border: 2.5px solid white;
         box-shadow: 0 2px 6px rgba(0,0,0,0.25);
         display: flex; align-items: center; justify-content: center;
-        font-size: 11px; font-weight: 700; color: white;
+        font-size: 13px; font-weight: 700; color: white;
         cursor: pointer; font-family: Inter, sans-serif;
+        opacity: ${paso.done ? '0.5' : '1'};
       `
-      // Número de orden en modo óptimo
-      if (showOptima && pt.type === 'origen') {
-        el.textContent = ordenOptimo[pt.pedido.id] || ''
-      } else {
-        el.innerHTML = pt.type === 'origen' ? '📦' : '🏢'
-        el.style.fontSize = '12px'
-      }
+      el.textContent = PASO_ICONS[pasoIndex] || `${pasoIndex + 1}`
 
-      el.addEventListener('click', () => setSelected(pt.pedido))
+      el.addEventListener('click', () => setSelected(pedido))
 
       const marker = new window.mapboxgl.Marker({ element: el })
         .setLngLat([pt.lng, pt.lat])
@@ -270,8 +168,9 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
           new window.mapboxgl.Popup({ offset: 20, closeButton: false, maxWidth: '200px' })
             .setHTML(`
               <div style="font-family:Inter,sans-serif">
-                <div style="font-size:12px;font-weight:700;color:#0F1117;margin-bottom:2px">${pt.pedido.cliente}</div>
-                <div style="font-size:11px;color:#5A6478">${pt.type === 'origen' ? '📦 Recojo' : '🏢 Entrega'}</div>
+                <div style="font-size:11px;color:#9AA3B5;margin-bottom:2px">${pedido.cliente}</div>
+                <div style="font-size:12px;font-weight:700;color:#0F1117;margin-bottom:2px">${paso.nombre}</div>
+                ${paso.contactoNombre ? `<div style="font-size:11px;color:#2563EB">${paso.contactoNombre}</div>` : ''}
                 <div style="font-size:11px;color:#9AA3B5;margin-top:2px">${pt.address || ''}</div>
               </div>
             `)
@@ -282,118 +181,54 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
       bounds.extend([pt.lng, pt.lat])
     })
 
-    // Línea de ruta
-    const coords = rutaPoints.map(p => [p.lng, p.lat])
-    map.addSource('route', {
-      type: 'geojson',
-      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } },
+    // Línea de ruta por pedido (conecta pasos de cada pedido)
+    const pedidosConPuntos = filtered.filter(p => getPuntosFromPedido(p).length > 1)
+    const allCoords = []
+    pedidosConPuntos.forEach(p => {
+      const pts = getPuntosFromPedido(p)
+      pts.forEach(pt => allCoords.push([pt.lng, pt.lat]))
     })
-    map.addLayer({
-      id: 'route', type: 'line', source: 'route',
-      paint: {
-        'line-color': showOptima ? '#16A34A' : '#2563EB',
-        'line-width': showOptima ? 3 : 2,
-        'line-dasharray': showOptima ? [1, 0] : [2, 3],
-        'line-opacity': 0.6,
-      },
-    })
+
+    if (allCoords.length > 1) {
+      map.addSource('route', {
+        type: 'geojson',
+        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: allCoords } },
+      })
+      map.addLayer({
+        id: 'route', type: 'line', source: 'route',
+        paint: { 'line-color': '#2563EB', 'line-width': 2, 'line-dasharray': [2, 3], 'line-opacity': 0.5 },
+      })
+    }
 
     if (!bounds.isEmpty()) {
       map.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 40, right: 40 }, maxZoom: 14, duration: 800 })
     }
-  }, [rutaPoints, mapLoaded, showOptima, ordenOptimo])
-
-  // ── MARKERS DE CONTACTOS ACTIVOS ──
-  useEffect(() => {
-    if (!mapLoaded || !mapRef.current || !window.mapboxgl) return
-
-    contactMarkersRef.current.forEach(m => m.remove())
-    contactMarkersRef.current = []
-
-    contactosActivos.forEach(c => {
-      const el = document.createElement('div')
-      el.style.cssText = `
-        width: 24px; height: 24px; border-radius: 6px;
-        background: #F59E0B; border: 2px solid white;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 12px; cursor: pointer;
-      `
-      el.innerHTML = '⭐'
-      el.title = c.nombre
-
-      const marker = new window.mapboxgl.Marker({ element: el })
-        .setLngLat([c.coords.lng, c.coords.lat])
-        .setPopup(
-          new window.mapboxgl.Popup({ offset: 18, closeButton: false })
-            .setHTML(`
-              <div style="font-family:Inter,sans-serif">
-                <div style="font-size:12px;font-weight:700;color:#0F1117">${c.nombre}</div>
-                <div style="font-size:11px;color:#5A6478">${c.categoria}</div>
-                ${c.telefono ? `<div style="font-size:11px;color:#9AA3B5">${c.telefono}</div>` : ''}
-              </div>
-            `)
-        )
-        .addTo(mapRef.current)
-
-      contactMarkersRef.current.push(marker)
-    })
-  }, [contactosActivos, mapLoaded])
+  }, [allPoints, mapLoaded, filtered])
 
   // ── FLY TO SELECTED ──
   useEffect(() => {
     if (!selected || !mapRef.current) return
-    const pt = points.find(p => p.pedido.id === selected.id && p.type === 'origen')
-    if (pt) mapRef.current.flyTo({ center: [pt.lng, pt.lat], zoom: 14, duration: 600 })
-  }, [selected, points])
+    const pts = getPuntosFromPedido(selected)
+    if (pts.length > 0) mapRef.current.flyTo({ center: [pts[0].lng, pts[0].lat], zoom: 14, duration: 600 })
+  }, [selected])
 
   const zonas = {}
-  filtered.forEach(p => {
-    const z = detectZona(p.origen)
-    if (!zonas[z]) zonas[z] = []
-    zonas[z].push(p)
+  allPoints.forEach(pt => {
+    const z = detectZona(pt.address || '')
+    if (!zonas[z]) zonas[z] = 0
+    zonas[z]++
   })
-
-  const pendientes = filtered.filter(p => !p.done)
 
   return (
     <div className="page">
-      {/* Filtros + toggle ruta óptima */}
+      {/* Filtros */}
       <div className="map-filterbar">
         {[['all','Todos'],['pending','Pendientes'],['urgent','Urgentes']].map(([val, label]) => (
           <button key={val} className={`map-filter-btn${activeFilter === val ? ' map-filter-btn--active' : ''}`} onClick={() => setFilter(val)}>
             {label}
           </button>
         ))}
-        {geocoding && <span style={{ fontSize: 11, color: 'var(--ink3)', marginLeft: 'auto' }}>Buscando…</span>}
-        {!geocoding && pendientes.length > 1 && (
-          <button
-            onClick={() => setShowOptima(v => !v)}
-            style={{
-              marginLeft: 'auto', padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-              border: `1px solid ${showOptima ? 'var(--green)' : 'var(--border)'}`,
-              background: showOptima ? 'var(--green-bg)' : 'var(--bg)',
-              color: showOptima ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer',
-            }}
-          >
-            {showOptima ? '✓ Ruta óptima' : '⚡ Optimizar'}
-          </button>
-        )}
       </div>
-
-      {/* Sugerencias de agrupación */}
-      {cercanos.length > 0 && (
-        <div style={{ background: '#FFFBEB', borderBottom: '1px solid #FDE68A', padding: '10px 14px', flexShrink: 0 }}>
-          {cercanos.map((g, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ fontSize: 14 }}>💡</span>
-              <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.4 }}>
-                <strong>{g.a.cliente}</strong> y <strong>{g.b.cliente}</strong> tienen recogidas a solo <strong>{g.dist}m</strong> de distancia — aprovecha el viaje.
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Mapa */}
       <div style={{ position: 'relative', height: 260, flexShrink: 0, background: 'var(--bg)' }}>
@@ -414,56 +249,31 @@ export default function MapPage({ pedidos, contactos = [], MAPBOX_TOKEN }) {
         {/* Leyenda */}
         {mapLoaded && Object.keys(zonas).length > 0 && (
           <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(255,255,255,0.93)', borderRadius: 8, padding: '8px 10px', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {Object.entries(zonas).map(([zona, ps]) => (
+            {Object.entries(zonas).map(([zona, count]) => (
               <div key={zona} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: ZONA_COLORS[zona] || '#6B7280', flexShrink: 0 }} />
                 <span style={{ fontSize: 11, color: 'var(--ink2)', fontWeight: 500 }}>{zona}</span>
-                <span style={{ fontSize: 11, color: 'var(--ink3)', marginLeft: 4 }}>{ps.length}</span>
+                <span style={{ fontSize: 11, color: 'var(--ink3)', marginLeft: 4 }}>{count}</span>
               </div>
             ))}
-            {contactosActivos.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, borderTop: '1px solid var(--border)', paddingTop: 4, marginTop: 2 }}>
-                <span style={{ fontSize: 10 }}>⭐</span>
-                <span style={{ fontSize: 11, color: 'var(--ink2)', fontWeight: 500 }}>Contactos activos</span>
-                <span style={{ fontSize: 11, color: 'var(--ink3)', marginLeft: 4 }}>{contactosActivos.length}</span>
-              </div>
-            )}
           </div>
         )}
       </div>
 
-      {/* Lista de pedidos */}
+      {/* Lista de pedidos con pasos */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ padding: '10px 16px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            {showOptima ? '⚡ Orden óptimo' : 'Pedidos del día'}
+            Pedidos del día
           </span>
-          <span style={{ fontSize: 11, color: 'var(--ink3)' }}>📦 Recojo · 🏢 Entrega</span>
+          <span style={{ fontSize: 11, color: 'var(--ink3)' }}>{PASO_ICONS[0]}…{PASO_ICONS[3]} pasos en mapa</span>
         </div>
         <div style={{ padding: '0 12px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {filtered.length === 0
             ? <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--ink3)', fontSize: 13 }}>No hay pedidos</div>
-            : (showOptima
-                ? <>
-                    {/* Recogidas */}
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '4px 2px' }}>
-                      📦 Recogidas — Centro primero
-                    </div>
-                    {optimizedPoints.filter(p => p.type === 'origen').map(p => (
-                      <PedidoRow key={p.pedido.id} pedido={p.pedido} selected={selected?.id === p.pedido.id} onSelect={setSelected} orden={ordenOptimo[p.pedido.id]} />
-                    ))}
-                    {/* Entregas */}
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '8px 2px 4px' }}>
-                      🏢 Entregas a clientes
-                    </div>
-                    {optimizedPoints.filter(p => p.type === 'destino').map((p, i) => (
-                      <PedidoRow key={`d-${p.pedido.id}`} pedido={p.pedido} selected={selected?.id === p.pedido.id} onSelect={setSelected} orden={null} />
-                    ))}
-                  </>
-                : filtered.map(p => (
-                    <PedidoRow key={p.id} pedido={p} selected={selected?.id === p.id} onSelect={setSelected} />
-                  ))
-              )
+            : filtered.map(p => (
+                <PedidoRow key={p.id} pedido={p} selected={selected?.id === p.id} onSelect={setSelected} />
+              ))
           }
         </div>
       </div>

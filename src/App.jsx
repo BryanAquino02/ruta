@@ -9,15 +9,12 @@ import ChatPage         from './pages/ChatPage'
 import MapPage          from './pages/MapPage'
 import ContactosPage    from './pages/ContactosPage'
 
-// ─────────────────────────────────────────
-//  🗺️  Token de Mapbox (variable de entorno)
-// ─────────────────────────────────────────
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
 export default function App() {
   const [activePage, setActivePage] = useState('tasks')
-  const { pedidos, addPedido, completePedido, deletePedido }         = usePedidos()
-  const { contactos, addContacto, updateContacto, deleteContacto }   = useContactos()
+  const { pedidos, addPedido, completePaso, uncompletePaso, completePedido, deletePedido } = usePedidos()
+  const { contactos, addContacto, updateContacto, deleteContacto } = useContactos()
 
   return (
     <div className="app-shell">
@@ -28,6 +25,8 @@ export default function App() {
           pedidos={pedidos}
           onComplete={completePedido}
           onDelete={deletePedido}
+          onCompletePaso={completePaso}
+          onUncompletePaso={uncompletePaso}
         />
       )}
 
