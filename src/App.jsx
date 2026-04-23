@@ -11,14 +11,50 @@ import ContactosPage    from './pages/ContactosPage'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
+function LoadingScreen() {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', gap: 12,
+    }}>
+      <div style={{ fontSize: 28 }}>📦</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Cargando MiRuta…</div>
+      <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Sincronizando con la nube</div>
+    </div>
+  )
+}
+
+function ErrorBanner({ message }) {
+  return (
+    <div style={{
+      background: 'var(--red-bg)', borderBottom: '1px solid var(--red)', padding: '10px 16px',
+      fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+    }}>
+      ⚠️ Error de conexión con Supabase — {message}
+    </div>
+  )
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState('tasks')
-  const { pedidos, addPedido, completePaso, uncompletePaso, completePedido, deletePedido } = usePedidos()
-  const { contactos, addContacto, updateContacto, deleteContacto } = useContactos()
+  const {
+    pedidos, loading: loadingPedidos, error: errorPedidos,
+    addPedido, completePaso, uncompletePaso, completePedido, deletePedido,
+  } = usePedidos()
+  const {
+    contactos, loading: loadingContactos,
+    addContacto, updateContacto, deleteContacto,
+  } = useContactos()
+
+  const loading = loadingPedidos || loadingContactos
+
+  if (loading) return <LoadingScreen />
 
   return (
     <div className="app-shell">
       <Header />
+
+      {errorPedidos && <ErrorBanner message={errorPedidos} />}
 
       {activePage === 'tasks' && (
         <TasksPage
