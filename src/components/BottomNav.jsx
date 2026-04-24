@@ -1,3 +1,4 @@
+// src/components/BottomNav.jsx
 function IconTasks() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -30,21 +31,22 @@ function IconContacts() {
     </svg>
   )
 }
-function IconChat() {
+function IconAnalytics() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <path d="M3 4a2 2 0 012-2h8a2 2 0 012 2v7a2 2 0 01-2 2H8l-3 2v-2H5a2 2 0 01-2-2V4Z" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M6 7h6M6 10h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <rect x="2" y="10" width="3" height="6" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="7.5" y="6" width="3" height="10" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="13" y="2" width="3" height="14" rx="1" stroke="currentColor" strokeWidth="1.3" />
     </svg>
   )
 }
 
 const TABS = [
-  { id: 'tasks',     label: 'Tareas',    Icon: IconTasks    },
-  { id: 'nuevo',     label: 'Nuevo',     Icon: IconAdd      },
-  { id: 'mapa',      label: 'Mapa',      Icon: IconMap      },
-  { id: 'contactos', label: 'Agenda',    Icon: IconContacts },
-  { id: 'chat',      label: 'Asistente', Icon: IconChat     },
+  { id: 'tasks',     label: 'Tareas',    Icon: IconTasks     },
+  { id: 'nuevo',     label: 'Nuevo',     Icon: IconAdd       },
+  { id: 'mapa',      label: 'Mapa',      Icon: IconMap       },
+  { id: 'contactos', label: 'Agenda',    Icon: IconContacts  },
+  { id: 'analytics', label: 'Stats',     Icon: IconAnalytics },
 ]
 
 export default function BottomNav({ activePage, onNavigate }) {
