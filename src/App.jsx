@@ -1,13 +1,15 @@
+// src/App.jsx
 import { useState } from 'react'
-import { usePedidos }   from './hooks/usePedidos'
-import { useContactos } from './hooks/useContactos'
-import Header           from './components/Header'
-import BottomNav        from './components/BottomNav'
-import TasksPage        from './pages/TasksPage'
-import NewPedidoPage    from './pages/NewPedidoPage'
-import ChatPage         from './pages/ChatPage'
-import MapPage          from './pages/MapPage'
-import ContactosPage    from './pages/ContactosPage'
+import { usePedidos }    from './hooks/usePedidos'
+import { useContactos }  from './hooks/useContactos'
+import Header            from './components/Header'
+import BottomNav         from './components/BottomNav'
+import TasksPage         from './pages/TasksPage'
+import NewPedidoPage     from './pages/NewPedidoPage'
+import ChatPage          from './pages/ChatPage'
+import MapPage           from './pages/MapPage'
+import ContactosPage     from './pages/ContactosPage'
+import AnalyticsPage     from './pages/AnalyticsPage'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -95,6 +97,10 @@ export default function App() {
 
       {activePage === 'chat' && (
         <ChatPage pedidos={pedidos} />
+      )}
+
+      {activePage === 'analytics' && (
+        <AnalyticsPage pedidos={pedidos} />
       )}
 
       <BottomNav activePage={activePage} onNavigate={setActivePage} />
